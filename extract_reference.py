@@ -26,12 +26,13 @@ data = np.genfromtxt(tec_files[0], skip_header=1)
 for itec in tec_files[1:]:
     data = np.hstack((data, np.genfromtxt(itec, skip_header=1)))
     with open(itec, "r") as f:
-        header.append([x.replace('"', "").lower().lstrip()
-                       for x in f.readline().split(',')[:-1]])
-
-header_0 = header
+        header += [x.replace('"', "").lower().lstrip()
+                   for x in f.readline().split(',')[:-1]]
 
 xxx = [[x] if x == header[0]
-       else [x.split("(")[0].split(" ")[-2]] for x in header]
-# x.split("(")[-2].split(")")[0],
+       else [x.split(x.split("(")[0].split(" ")[-2])[0],
+             x.split("(")[0].split(" ")[-2],
+             x.split("(")[-2].split(")")[0],
+             x.split("(")[-1].split(")")[0]] for x in header]
+# # x.split("(")[-2].split(")")[0],
 # x.split("(")[-1].split(")")[0]]
