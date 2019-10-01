@@ -91,25 +91,36 @@ def batch_delta_to_time(origin, x, time_format, delta_format):
     return(y)
 
 
+def batch_time_to_delta(origin, x, time_format):
+    nx = len(x)
+    y = []
+    for ix in range(nx):
+        temp_y = abs(datetime.strptime(
+            x[ix], time_format) - origin).total_seconds()
+        y.append(temp_y)
+    y = np.asarray(y)
+
+
 multi_dir = "/media/sf_e/john/optim_5/single_h5/"
 results_dir = "/media/sf_e/john/optim_5/"
 img_dir = "/media/sf_e/john/optim_5/figures/"
 material_file = "/media/sf_e/john/optim_5/300A_material.h5"
 river_stage = "/media/sf_e/john/optim_5/DatumH_River_filtered_6h_321.txt"
+sampling_file = "/media/sf_e/john/optim_5/Sample_Data_2015_U.csv"
 
-we1ll_name = ["399-1-10A",
-              "399-1-21A",
-              "399-2-01",
-              "399-2-02",
-              "399-2-23",
-              "399-2-03",
-              "399-2-32",
-              "399-2-33",
-              "399-2-05",
-              "399-2-07",
-              "399-3-19",
-              "399-3-09",
-              "399-4-09"]
+well_name = ["399-1-10A",
+             "399-1-21A",
+             "399-2-01",
+             "399-2-02",
+             "399-2-23",
+             "399-2-03",
+             "399-2-32",
+             "399-2-33",
+             "399-2-05",
+             "399-2-07",
+             "399-3-19",
+             "399-3-09",
+             "399-4-09"]
 well_cluster = [1, 3, 4, 4, 2, 4, 2, 2, 2, 2, 3, 4, 1]
 well_coord = np.array([[594346.57, 116733.99],
                        [594160.78, 116183.88],
@@ -181,7 +192,38 @@ mass1_date = np.array([datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
                        for x in mass1_date])
 mass1_level = mass1[:, -1]
 
-# read material
+# read sample
+sample_data = np.genfromtxt(sampling_file,
+                            skip_header=1,
+                            delimiter=",",
+                            dtype="str")
+sample_well = np.array(sample_data[:, 0])
+sample_time = np.array([datetime.strptime(x, "%d-%b-%Y %H:%M:%S")
+                        for x in sample_data[:, 1]])
+sample_spc = np.array(sample_data[:, 3], dtype=np.float)
+sample_u = np.array(sample_data[:, 3], dtype=np.float)
+sample_data = dict()
+for iwell in np.unique(sample_well):
+    sample_data[iwell] = dict()
+    sample_data[iwell]["time"] = sample_time[sample_well == iwell]
+    sample_data[iwell]["spc"] = sample_spc[sample_well == iwell]
+    sample_data[iwell]["u"] = sample_u[sample_well == iwell]
+max_spc = np.max(sample_spc)
+min_spc = np.min(sample_spc)
+max_u = np.max(sample_u)
+min_u = np.min(sample_u)
+cluster_well = [[],
+                ["399-2-32"],
+                ["399-1-21A"],
+                ["399-2-2"],
+                ["399-1-10A"]]
+cluster_well_name = [[],
+                     ["Well 2-32"],
+                     ["Well 1-21A"],
+                     ["Well 2-02"],
+                     ["Well 1-10A"]]
+
+
 f = h5.File(material_file, "r")
 material = f["Materials"]["Material Ids"][:].reshape((nx, ny, nz), order="F")
 f.close()
@@ -302,15 +344,31 @@ def test2():
                     color=colors[i],
                     linewidth=0.1,
                     )
+        for iwell in cluster_well[i]:
+            ax.plot(sample_data[iwell]["time"],
+                    1-(sample_data[iwell]["spc"]-min_spc)/(max_spc-min_spc),
+                    color="black")
         ax.set_ylim(0, 1)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title("Spatial cluster #"+str(i+1), fontsize=12)
-    ax.set_ylabel("Normalized concentration (-)")
+        if len(cluster_well[i]) > 0:
+            legend_elements = list()
+            for iwell_index, iwell in enumerate(cluster_well[i]):
+                legend_elements.append(
+                    Line2D([0], [0], color='black',
+                           label=cluster_well_name[i][iwell_index]))
+            ax.legend(handles=legend_elements,
+                      loc="upper right",
+                      fancybox=True, framealpha=0.4)
+
+#    ax.set_ylabel("Normalized concentration (-)")
+    ax.set_ylabel("River water fraction(-)")
     ax.set_xticks(date_mark)  # rotation=45)
     ax.set_xticklabels([x.strftime("%Y-%m") for x in date_mark],
                        rotation=0)
     ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+
     for i, ax in enumerate(fig.axes[ncluster:]):
         ax.set_visible(False)
     plt.subplots_adjust(top=0.97, bottom=0.04, left=0.15,
