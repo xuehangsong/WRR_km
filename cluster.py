@@ -107,7 +107,11 @@ img_dir = "/media/sf_e/john/optim_5/figures/"
 material_file = "/media/sf_e/john/optim_5/300A_material.h5"
 river_stage = "/media/sf_e/john/optim_5/DatumH_River_filtered_6h_321.txt"
 sampling_file = "/media/sf_e/john/optim_5/Sample_Data_2015_U.csv"
+wells_dir = "/media/sf_e/john/wells/"
 
+colors = cm.Set1(np.linspace(0, 1, 9))
+
+# cluster information from Chris
 well_name = ["399-1-10A",
              "399-1-21A",
              "399-2-01",
@@ -149,7 +153,7 @@ date_mark = [datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in
               "2014-09-01 00:00:00",
               ]]
 
-# load data
+# load spatial data
 river_pattern = joblib.load(results_dir+"river_pattern.joblib")
 river_tracer = np.array([river_pattern[x].flatten(order="F")
                          for x in np.arange(len(river_pattern)-1)])
@@ -157,7 +161,7 @@ times = river_pattern["times"][:len(river_tracer)]
 ntime = len(times)
 ncell = len(river_tracer[0])
 
-# define dimension
+# read model  dimension
 f = h5.File(multi_dir+"Coordinates.h5", "r")
 x = np.array(f['Coordinates']["X [m]"])+593000
 y = np.array(f['Coordinates']["Y [m]"])+114500
@@ -181,7 +185,7 @@ x_array = np.array([x]*ny).flatten(order="C")
 y_array = np.array([y]*nx).flatten(order="F")
 f.close()
 
-# read mass1
+# read mass1 data
 mass1 = np.genfromtxt(river_stage)
 mass1_time = mass1[:, 0]/3600
 mass1_date = batch_delta_to_time(date_origin,
@@ -192,7 +196,7 @@ mass1_date = np.array([datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
                        for x in mass1_date])
 mass1_level = mass1[:, -1]
 
-# read sample
+# read groundwater sample
 sample_data = np.genfromtxt(sampling_file,
                             skip_header=1,
                             delimiter=",",
@@ -212,6 +216,7 @@ max_spc = np.max(sample_spc)
 min_spc = np.min(sample_spc)
 max_u = np.max(sample_u)
 min_u = np.min(sample_u)
+# representive wells
 cluster_well = [[],
                 ["399-2-32"],
                 ["399-1-21A"],
@@ -223,7 +228,7 @@ cluster_well_name = [[],
                      ["Well 2-02"],
                      ["Well 1-10A"]]
 
-
+# read material information
 f = h5.File(material_file, "r")
 material = f["Materials"]["Material Ids"][:].reshape((nx, ny, nz), order="F")
 f.close()
@@ -250,11 +255,8 @@ mean_tracer = np.mean(river_tracer, 0)
 river_tracer_ori = copy.deepcopy(river_tracer)
 
 # exclude low concentration locations from clustering
-# low_conc = np.where(np.max(river_tracer, 0) < 0.1)[0]
 high_conc = np.where(np.max(river_tracer, 0) > 0.1)[0]
-
-
-# exclude part below river
+# exclude the second chanel part
 river_index = copy.deepcopy(river_bed)
 for iy in range(ny):
     left_bank = np.where(river_bed[:, iy] < 104)[0][0]
@@ -267,74 +269,86 @@ poly_bc = []
 for iy in y:
     ix = x_array[high_conc][y_array[high_conc] == iy]
     poly_bc += [[min(ix), iy], [max(ix), iy]]
+# high_shape = MultiPoint(poly_bc).convex_hull
+# poly_patch = PolygonPatch(high_shape)
+# ax.add_patch(poly_patch)
+# poly_bc = np.array(poly_bc)
 
-random.seed(1)
-ri = random.choices(np.arange(len(river_tracer[0])), k=100)
-imgfile = img_dir+"river_series.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-for i in ri:
-    ax.plot(times, river_tracer[:, i])
-fig.set_size_inches(16, 4)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, density=600)
-plt.close(fig)
 
+# random.seed(1)
+# ri = random.choices(np.arange(len(river_tracer[0])), k=100)
+# imgfile = img_dir+"river_series.png"
+# fig = plt.figure()
+# ax = plt.subplot(111)
+# for i in ri:
+#     ax.plot(times, river_tracer[:, i])
+# fig.set_size_inches(16, 4)
+# plt.tight_layout()
+# fig.savefig(imgfile, bbox_inches=0, density=600)
+# plt.close(fig)
+
+# only take sample from spatial simualtions
 random.seed(1)
 ri = random.choices(np.arange(len(river_tracer[0])), k=10000)
 
-# direct compute distance
+# compute distance from
 dis_river = distance.pdist(X=np.transpose(
-    #    river_tracer[:, ri]), metric='euclidean')
     river_tracer[:, ri]), metric='correlation')
+#    river_tracer[:, ri]), metric='euclidean')
+spatial_cluster = hierarchy.ward(dis_river)
+
+dis_time = distance.pdist(X=river_tracer, metric='correlation')
+time_cluster = hierarchy.ward(dis_time)
 
 
-# def plot_distance_cluster():
-#     """
-#     plot cluster dendrogram map
-#     """
-subset_cluster = hierarchy.ward(dis_river)
-imgfile = img_dir+"subset_distance_cluster.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-dendrogram(subset_cluster,
-           orientation="right")
-fig.set_size_inches(6, 15)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, density=600)
-plt.close(fig)
+def plot_distance_cluster():
+    """
+    plot cluster dendrogram map
+    """
+    imgfile = img_dir+"subset_distance_cluster.png"
+    fig = plt.figure()
+    ax = plt.subplot(111)
+    dendrogram(spatial_cluster,
+               orientation="right")
+    fig.set_size_inches(6, 15)
+    plt.tight_layout()
+    fig.savefig(imgfile, bbox_inches=0, density=600)
+    plt.close(fig)
 
-ncluster = 5
-cluster_ids = hierarchy.fcluster(
-    subset_cluster, t=ncluster, criterion="maxclust")
-colors = cm.Set1(np.linspace(0, 1, 9))
-
-
-imgfile = img_dir+"subset_point.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-ax.scatter(x_array[high_conc[ri]],
-           y_array[high_conc[ri]],
-           color=colors[cluster_ids-1])
-ax.set_xlim(ox, ex)
-ax.set_ylim(oy, ey)
-ax.set_xlabel("Easting (m)")
-ax.set_ylabel("Northing (m)")
-ax.set_aspect(1)
-legend_elements = list()
-for icluster in range(ncluster):
-    legend_elements.append(Patch(facecolor=colors[icluster],
-                                 edgecolor=colors[icluster],
-                                 label='Cluster '+str(icluster+1)))
-ax.legend(handles=legend_elements, loc='upper left')
-fig.set_size_inches(6, 9)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, density=600)
-plt.close(fig)
+# ncluster = 5
+# cluster_ids = hierarchy.fcluster(
+#     spatial_cluster, t=ncluster, criterion="maxclust")
+# imgfile = img_dir+"subset_point.png"
+# fig = plt.figure()
+# ax = plt.subplot(111)
+# ax.scatter(x_array[high_conc[ri]],
+#            y_array[high_conc[ri]],
+#            color=colors[cluster_ids-1])
+# ax.set_xlim(ox, ex)
+# ax.set_ylim(oy, ey)
+# ax.set_xlabel("Easting (m)")
+# ax.set_ylabel("Northing (m)")
+# ax.set_aspect(1)
+# legend_elements = list()
+# for icluster in range(ncluster):
+#     legend_elements.append(Patch(facecolor=colors[icluster],
+#                                  edgecolor=colors[icluster],
+#                                  label='Cluster '+str(icluster+1)))
+# ax.legend(handles=legend_elements, loc='upper left')
+# fig.set_size_inches(6, 9)
+# plt.tight_layout()
+# fig.savefig(imgfile, bbox_inches=0, density=600)
+# plt.close(fig)
 
 
-def test2():
+def plot_cluster_time_series():
+    """
+    plot time series of spatial clusters
+    """
+
     ncluster = 5
+    cluster_ids = hierarchy.fcluster(
+        spatial_cluster, t=ncluster, criterion="maxclust")
     imgfile = img_dir+"cluster_series.png"
     fig, axs = plt.subplots(5, 1)
     for i, ax in enumerate(fig.axes[0:ncluster]):
@@ -350,7 +364,7 @@ def test2():
                     color="black")
         ax.set_ylim(0, 1)
         ax.set_xticks([])
-        ax.set_yticks([])
+#        ax.set_yticks([])
         ax.set_title("Spatial cluster #"+str(i+1), fontsize=12)
         if len(cluster_well[i]) > 0:
             legend_elements = list()
@@ -361,7 +375,7 @@ def test2():
             ax.legend(handles=legend_elements,
                       loc="upper right",
                       fancybox=True, framealpha=0.4)
-
+        ax.set_ylabel("River water fraction(-)")
 #    ax.set_ylabel("Normalized concentration (-)")
     ax.set_ylabel("River water fraction(-)")
     ax.set_xticks(date_mark)  # rotation=45)
@@ -377,18 +391,17 @@ def test2():
     fig.savefig(imgfile, bbox_inches=0, dpi=300, transparent=True)
     plt.close(fig)
 
-# high_shape = MultiPoint(poly_bc).convex_hull
-# poly_patch = PolygonPatch(high_shape)
-# ax.add_patch(poly_patch)
-# poly_bc = np.array(poly_bc)
 
+def plot_spatial_clusters():
+    """
+    plot ringole top
+    """
+    ncluster = 5
+    cluster_ids = hierarchy.fcluster(
+        spatial_cluster, t=ncluster, criterion="maxclust")
 
-def test():
     imgfile = img_dir+"ringold_top.png"
-    # gs = gridspec.GridSpec(1, 2,
-    #                        width_ratios=[10, 1])
     fig = plt.figure()
-#    ax = fig.add_subplot(gs[0])
     ax = fig.add_subplot(111)
     cf = ax.contourf(x, y,
                      np.transpose(ringold_top),
@@ -444,62 +457,69 @@ def test():
     plt.close(fig)
 
 
-poly_bc = np.array(poly_bc)
-imgfile = img_dir+"ringold_top_2.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-cf = ax.contourf(x, y,
-                 np.transpose(ringold_top),
-                 cmap=plt.cm.jet)
-ax.scatter(poly_bc[:, 0],
-           poly_bc[:, 1],
-           color="black",
-           s=0.5)
-ax.set_xlim(ox, ex)
-ax.set_ylim(oy, ey)
-ax.set_xlabel("Easting (m)")
-ax.set_ylabel("Northing (m)")
-ax.set_aspect(1)
-fig.set_size_inches(6, 9)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, dpi=300)
-plt.close(fig)
+# poly_bc = np.array(poly_bc)
+# imgfile = img_dir+"ringold_top_2.png"
+# fig = plt.figure()
+# ax = plt.subplot(111)
+# cf = ax.contourf(x, y,
+#                  np.transpose(ringold_top),
+#                  cmap=plt.cm.jet)
+# ax.scatter(poly_bc[:, 0],
+#            poly_bc[:, 1],
+#            color="black",
+#            s=0.5)
+# ax.set_xlim(ox, ex)
+# ax.set_ylim(oy, ey)
+# ax.set_xlabel("Easting (m)")
+# ax.set_ylabel("Northing (m)")
+# ax.set_aspect(1)
+# fig.set_size_inches(6, 9)
+# plt.tight_layout()
+# fig.savefig(imgfile, bbox_inches=0, dpi=300)
+# plt.close(fig)
 
 
-poly_bc = np.array(poly_bc)
-imgfile = img_dir+"mean_tracer.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-ax.contourf(x, y,
-            np.transpose(mean_tracer.reshape((nx, ny), order="F")),
-            cmap=plt.cm.jet)
-ax.scatter(poly_bc[:, 0],
-           poly_bc[:, 1],
-           color="black",
-           s=0.5)
-ax.set_xlim(ox, ex)
-ax.set_ylim(oy, ey)
-ax.set_aspect(1)
-fig.set_size_inches(6, 9)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, density=600)
-plt.close(fig)
+# poly_bc = np.array(poly_bc)
+# imgfile = img_dir+"mean_tracer.png"
+# fig = plt.figure()
+# ax = plt.subplot(111)
+# ax.contourf(x, y,
+#             np.transpose(mean_tracer.reshape((nx, ny), order="F")),
+#             cmap=plt.cm.jet)
+# ax.scatter(poly_bc[:, 0],
+#            poly_bc[:, 1],
+#            color="black",
+#            s=0.5)
+# ax.set_xlim(ox, ex)
+# ax.set_ylim(oy, ey)
+# ax.set_aspect(1)
+# fig.set_size_inches(6, 9)
+# plt.tight_layout()
+# fig.savefig(imgfile, bbox_inches=0, density=600)
+# plt.close(fig)
 
 
-dis_time = distance.pdist(X=river_tracer, metric='correlation')
-time_cluster = hierarchy.ward(dis_time)
-imgfile = img_dir+"distance_time.png"
-fig = plt.figure()
-ax = plt.subplot(111)
-dendrogram(time_cluster,
-           orientation="right")
-fig.set_size_inches(6, 15)
-plt.tight_layout()
-fig.savefig(imgfile, bbox_inches=0, density=600)
-plt.close(fig)
+def plot_distance_cluster():
+    """
+    plot cluster dendrogram map
+    """
+
+    imgfile = img_dir+"distance_time.png"
+    fig = plt.figure()
+    ax = plt.subplot(111)
+    dendrogram(time_cluster,
+               orientation="right")
+    fig.set_size_inches(6, 15)
+    plt.tight_layout()
+    fig.savefig(imgfile, bbox_inches=0, density=600)
+    plt.close(fig)
 
 
-def test3():
+def plot_cluster_spatial():
+    """
+    plot spatial map of time clusters
+    """
+
     ncluster = 3
     time_ids = hierarchy.fcluster(
         time_cluster, t=ncluster, criterion="maxclust")
@@ -540,7 +560,7 @@ def test3():
     plt.close(fig)
 
 
-def test4():
+def plot_temporal_clusters():
     ncluster = 3
     time_ids = hierarchy.fcluster(
         time_cluster, t=ncluster, criterion="maxclust")
@@ -563,7 +583,6 @@ def test4():
     ax.set_xlim(mass1_date[mass1_index[0]],
                 mass1_date[mass1_index[-1]])
     ax.set_ylim(104, 108)
-#    ax.set_xlabel("Easting (m)")
     ax.set_ylabel("River stage (m)")
     legend_elements = list()
     for icluster in range(ncluster):
