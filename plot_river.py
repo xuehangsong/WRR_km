@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.externals import joblib
 from datetime import datetime, timedelta
-import matplotlib.gridspec as gridspec
+import matplotlib.gridspec as gridspec 
 
 
 def batch_delta_to_time(origin, x, time_format, delta_format):
