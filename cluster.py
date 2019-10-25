@@ -10,10 +10,9 @@
 import glob
 import numpy as np
 import h5py as h5
-import copy
+from copy import deepcopy
 import joblib
 import matplotlib.pyplot as plt
-import random
 from datetime import datetime, timedelta
 from scipy.spatial import distance
 from scipy.cluster import hierarchy
@@ -27,6 +26,7 @@ from matplotlib.lines import Line2D
 from pylab import *
 import matplotlib.gridspec as gridspec
 from scipy.spatial.distance import squareform
+import random
 
 
 def DTWDistance(s1, s2):
@@ -98,7 +98,7 @@ def batch_time_to_delta(origin, x, time_format):
     nx = len(x)
     y = []
     for ix in range(nx):
-        temp_y = abs(datetime.strptime(
+        temp_y = abs(datetime.datetime.strptime(
             x[ix], time_format) - origin).total_seconds()
         y.append(temp_y)
     y = np.asarray(y)
@@ -161,10 +161,13 @@ well_marker = ["o",  "^", "X", "*", "s", "v", "<", ">"]
 line_type = ["-", ":"]
 
 # define key date
-date_origin = datetime.strptime("2010-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-date_start = datetime.strptime("2013-03-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-date_end = datetime.strptime("2015-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-date_mark = [datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in
+date_origin = datetime.datetime.strptime(
+    "2010-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+date_start = datetime.datetime.strptime(
+    "2013-03-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+date_end = datetime.datetime.strptime(
+    "2015-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+date_mark = [datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in
              ["2013-03-01 00:00:00",
               "2013-09-01 00:00:00",
               "2014-03-01 00:00:00",
@@ -210,7 +213,7 @@ mass1_date = batch_delta_to_time(date_origin,
                                  mass1_time,
                                  "%Y-%m-%d %H:%M:%S",
                                  "hours")
-mass1_date = np.array([datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+mass1_date = np.array([datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
                        for x in mass1_date])
 mass1_level = mass1[:, -1]
 
@@ -220,7 +223,7 @@ sample_data = np.genfromtxt(sampling_file,
                             delimiter=",",
                             dtype="str")
 sample_well = np.array(sample_data[:, 0])
-sample_time = np.array([datetime.strptime(x, "%d-%b-%Y %H:%M:%S")
+sample_time = np.array([datetime.datetime.strptime(x, "%d-%b-%Y %H:%M:%S")
                         for x in sample_data[:, 1]])
 sample_spc = np.array(sample_data[:, 3], dtype=np.float)
 sample_u = np.array(sample_data[:, 3], dtype=np.float)
@@ -275,7 +278,7 @@ time_x = batch_delta_to_time(date_origin,
                              times,
                              "%Y-%m-%d %H:%M:%S",
                              "hours")
-time_date = np.array([datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+time_date = np.array([datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
                       for x in time_x])
 time_index = (time_date >= date_start)*(time_date <= date_end)
 times = np.array(times)[time_index]
@@ -283,7 +286,7 @@ time_x = time_x[time_index]
 time_date = time_date[time_index]
 river_tracer = river_tracer[time_index]
 mean_tracer = np.mean(river_tracer, 0)
-river_tracer_ori = copy.deepcopy(river_tracer)
+river_tracer_ori = deepcopy(river_tracer)
 
 # interp well data to simualtion data
 interp_well = dict()
@@ -304,7 +307,7 @@ obs_cluster = hierarchy.ward(dist_obs)
 # exclude low concentration locations from clustering
 high_conc = np.where(np.max(river_tracer, 0) > 0.1)[0]
 # exclude the second chanel part
-river_index = copy.deepcopy(river_bed)
+river_index = deepcopy(river_bed)
 for iy in range(ny):
     left_bank = np.where(river_bed[:, iy] < 104)[0][0]
     river_index[left_bank:, iy] = 0
